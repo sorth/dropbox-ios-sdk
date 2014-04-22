@@ -148,7 +148,7 @@ id<DBNetworkRequestDelegate> dbNetworkRequestDelegate = nil;
     // Parse out the x-response-metadata as JSON.
     xDropboxMetadataJSON = [[[[response allHeaderFields] objectForKey:@"X-Dropbox-Metadata"] JSONValue] retain];
 
-    if (resultFilename && [self statusCode] == 200) {
+    if (resultFilename && ([self statusCode] == 200 || [self statusCode] == 206)) {
         // Create the file here so it's created in case it's zero length
         // File is downloaded into a temporary file and then moved over when completed successfully
         NSString *filename = [[NSProcessInfo processInfo] globallyUniqueString];
@@ -165,7 +165,7 @@ id<DBNetworkRequestDelegate> dbNetworkRequestDelegate = nil;
 }
 
 - (void)connection:(NSURLConnection *)connection didReceiveData:(NSData *)data {
-    if (resultFilename && [self statusCode] == 200) {
+    if (resultFilename && ([self statusCode] == 200 || [self statusCode] == 206)) {
         @try {
             [fileHandle writeData:data];
         } @catch (NSException *e) {
@@ -205,7 +205,7 @@ id<DBNetworkRequestDelegate> dbNetworkRequestDelegate = nil;
     [fileHandle release];
     fileHandle = nil;
     
-    if (self.statusCode != 200) {
+    if (!(self.statusCode == 200 || self.statusCode == 206)) {
         NSMutableDictionary *errorUserInfo = [NSMutableDictionary dictionaryWithDictionary:userInfo];
         // To get error userInfo, first try and make sense of the response as JSON, if that
         // fails then send back the string as an error message
@@ -244,8 +244,8 @@ id<DBNetworkRequestDelegate> dbNetworkRequestDelegate = nil;
             
             BOOL success = [fileManager moveItemAtPath:tempFilename toPath:resultFilename error:&moveError];
             if (!success) {
-                DBLogError(@"DBRequest#connectionDidFinishLoading: error moving temp file to desired location: %@",
-                    [moveError localizedDescription]);
+                DBLogError(@"DBRequest#connectionDidFinishLoading: error moving temp file: %@ to desired location: %@ with error: %@",
+                    tempFilename, resultFilename,[moveError localizedDescription]);
                 [self setError:[NSError errorWithDomain:moveError.domain code:moveError.code userInfo:self.userInfo]];
             }
         }
@@ -325,6 +325,8 @@ id<DBNetworkRequestDelegate> dbNetworkRequestDelegate = nil;
         SecTrustResultType trustResult = kSecTrustResultInvalid;
         SecTrustEvaluate(serverTrust, &trustResult);
         if (trustResult == kSecTrustResultUnspecified) {
+// uncomment the line below to use with Charles
+//                if (YES) {
             // Certificate validation succeeded. Continue the connection
             [challenge.sender
              useCredential:[NSURLCredential credentialForTrust:challenge.protectionSpace.serverTrust]

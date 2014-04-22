@@ -336,6 +336,36 @@
     [self loadFile:path atRev:nil intoPath:destPath];
 }
 
+- (void)loadPartialDataFromFile:(NSString *)path intoPath:(NSString *)destPath withRange:(NSRangePointer)range
+{
+    
+    NSString* fullPath = [NSString stringWithFormat:@"/files/%@%@", root, path];
+    
+    NSDictionary *params = nil;
+    
+    NSMutableURLRequest* urlRequest = [self requestWithHost:kDBDropboxAPIContentHost path:fullPath parameters:params];
+    
+    if (range) {
+		[urlRequest addValue:[NSString stringWithFormat:@"bytes=%zu-%zu", (unsigned long)range->location, (unsigned long)range->location + range->length]
+		  forHTTPHeaderField:@"Range"];
+	}
+    
+    DBRequest* request =
+    [[[DBRequest alloc]
+      initWithURLRequest:urlRequest andInformTarget:self selector:@selector(requestDidLoadFile:)]
+     autorelease];
+
+    
+    request.resultFilename = destPath;
+    request.downloadProgressSelector = @selector(requestLoadProgress:);
+    request.userInfo = [NSDictionary dictionaryWithObjectsAndKeys:
+                        path, @"path",
+                        destPath, @"destinationPath",
+                        nil, @"rev", nil];
+    [loadRequests setObject:request forKey:path];
+    
+}
+
 - (void)cancelFileLoad:(NSString*)path {
     DBRequest* outstandingRequest = [loadRequests objectForKey:path];
     if (outstandingRequest) {
